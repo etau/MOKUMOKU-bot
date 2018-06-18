@@ -1,1 +1,1 @@
-MOKUMOKU -bot
+MOKUMOKU-bot
