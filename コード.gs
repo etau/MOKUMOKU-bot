@@ -12,15 +12,14 @@
 function doPost(e) {
   
   /* パラメータを取得し、条件が一致した場合、処理終了 */
-  var properties = PropertiesService.getScriptProperties();
-  var userId     = e.parameter.user_id;
-  var token      = e.parameter.token;
-  var text       = e.parameter.text;
+  var props  = PropertiesService.getScriptProperties();
+  var token  = e.parameter.token;
+  if (token != props.getProperty('SLACK_WEBHOOK_TOKEN')) return;
   
-  if (userId == properties.getProperty('SLACK_BOT_ID') 
-    || token != properties.getProperty('SLACK_WEBHOOK_TOKEN')) {
-      return;
-    }
+  var userId = e.parameter.user_id;
+  if (userId == props.getProperty('SLACK_BOT_ID')) return;
+  
+  var text   = e.parameter.text;
   
   /* logs シートに slack ID と message を残す */
   var ss     = SpreadsheetApp.getActiveSpreadsheet();
@@ -33,40 +32,46 @@ function doPost(e) {
   
   if (text.match('もくもく開始')) { // 開始時のメッセージ
     message += 'もくもく、がんばってください！ :stmp_fight:';
-    var count = parseInt(properties.getProperty('MOKUMOKU_MEMBERS_COUNT')) + 1;
-    properties.setProperty('MOKUMOKU_MEMBERS_COUNT', count);
+    var count = parseInt(props.getProperty('MOKUMOKU_MEMBERS_COUNT')) + 1;
+    props.setProperty('MOKUMOKU_MEMBERS_COUNT', count);
     message += '\n現在の参加者は、' + count + ' 人です。\n';
     
-    var values = logsSh.getDataRange().getValues();
-    var daysCount  = 0;
-    var dateArr = [];
+    var values    = logsSh.getDataRange().getValues();
+    var daysCount = 0;
+    var dateArr   = [];
+    
     for (var i = 0; i < values.length; i++) {
-      if (values[i][1] == userId && values[i][2].match('もくもく開始')) {
+      if (values[i][1] === userId && values[i][2].match('もくもく開始')) {
         daysCount++;
-        dateArr.push(Utilities.formatDate(new Date(values[i][0]), 'Asia/Tokyo', 'yyyy 年 M 月 d 日'));
+        dateArr.push(Utilities.formatDate(new Date(values[i][0]), 'JST', 'yyyy 年 M 月 d 日'));
       }
     }
     
-    /* 配列の重複を削除 */
-    dateArr = dateArr.filter(function (x, i, self) {
-      return self.indexOf(x) === i;
-    });
+    if (dateArr.length === 0) { // 初参加かログ取得以前の場合
+      message += '<@' + userId + '> さんは、もくもく広場ではじめてのもくもくですか？それとも 2018 年 5 月以降のもくもくですか？';
     
-    var lastDate = dateArr[dateArr.length - 2].split('年 ')[1];
-    message += '<@' + userId + '> さん、' + lastDate + 'ぶり、 ' + dateArr.length + ' 日目 (' + daysCount + ' 回目) のもくもくです。'; 
+    } else { // 過去に参加ログのある場合
+      /* 配列の重複を削除 */
+      dateArr = dateArr.filter(function (x, i, self) {
+        return self.indexOf(x) === i;
+      });
+      
+      var lastDate = dateArr[dateArr.length - 2].split('年 ')[1];
+      message += '<@' + userId + '> さん、' + lastDate + 'ぶり、 ' + dateArr.length + ' 日目 (' + daysCount + ' 回目) のもくもくです。'; 
+    }
   }
   
   if (text.match('もくもく終了')) { // 終了時のメッセージ
     message += 'もくもく、おつかれさまでした！ :stmp_fight:';
-    var count = parseInt(properties.getProperty('MOKUMOKU_MEMBERS_COUNT')) - 1;
+    var count = parseInt(props.getProperty('MOKUMOKU_MEMBERS_COUNT')) - 1;
     
-    if (count == 0) {
-      properties.setProperty('MOKUMOKU_MEMBERS_COUNT', count); // HACK:人数をマイナスにしないために if 内で行う
+    if (count === 0) {
+      props.setProperty('MOKUMOKU_MEMBERS_COUNT', count); // HACK:人数をマイナスにしないために if 内で行う
       message += '\n現在もくもくしている人はいません。';
       message += '\nもくもくされる方は「もくもく開始」、終了する場合は「もくもく終了」とこのチャンネルにメッセージしてくださいね。';
       
     } else if (count > 0) {
-      properties.setProperty('MOKUMOKU_MEMBERS_COUNT', count); // HACK:人数をマイナスにしないために if 内で行う
+      props.setProperty('MOKUMOKU_MEMBERS_COUNT', count); // HACK: 人数をマイナスにしないために if 内で行う
       message += '\n現在の参加者は、' + count + ' 人です。';
     }
   }
@@ -85,10 +90,10 @@ function doPost(e) {
 
 function sendMessageFromBot(message) {
   
-  var properties = PropertiesService.getScriptProperties();
-  var slackApp   = SlackApp.create(properties.getProperty('SLACK_BOT_TOKEN'));
-  var channelId  = properties.getProperty('SLACK_CHANNEL');
-  var options    = {as_user: true};
+  var props     = PropertiesService.getScriptProperties();
+  var slackApp  = SlackApp.create(props.getProperty('SLACK_BOT_TOKEN'));
+  var channelId = props.getProperty('SLACK_CHANNEL');
+  var options   = {as_user: true};
   slackApp.postMessage(channelId, message, options);
   
 }
